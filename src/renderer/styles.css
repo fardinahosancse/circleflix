@@ -626,3 +626,12 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px;
 .p-minibar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; z-index: 9; background: rgba(255,255,255,.2); display: none; }
 .player.mini .p-minibar { display: block; }
 .p-minibar i { display: block; height: 100%; background: var(--grad); }
+
+/* ---------- Photo cropper ---------- */
+.crop { position: relative; width: 280px; height: 280px; margin: 0 auto 18px; border-radius: 50%; overflow: hidden; cursor: grab; background: #000; touch-action: none; box-shadow: 0 0 0 4px var(--bg), 0 0 0 6px rgba(109,92,255,.7), 0 20px 50px rgba(0,0,0,.45); }
+.crop.drag { cursor: grabbing; }
+.crop img { position: absolute; left: 0; top: 0; max-width: none; transform-origin: 0 0; user-select: none; -webkit-user-drag: none; pointer-events: none; }
+.crop-zoom { display: flex; align-items: center; gap: 12px; margin: 0 auto 22px; width: 280px; color: var(--muted); }
+.crop-zoom input { flex: 1; }
+:root[data-theme="light"] .crop-zoom input[type=range] { background: linear-gradient(90deg, var(--accent) var(--v, 0%), rgba(24,24,60,.18) var(--v, 0%)); }
+:root[data-theme="light"] .crop-zoom input[type=range]::-webkit-slider-thumb { background: var(--accent); }

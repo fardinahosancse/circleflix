@@ -156,19 +156,71 @@ export function renderAvatar() {
   el.textContent = p.picture ? '' : initials(p.name);
 }
 
-function readPicture(file) { // center-crop to a 256px square JPEG data URL
+// Photo cropper: drag to position, slider / mouse wheel to zoom. Resolves a 256px JPEG data URL, or null.
+function cropDialog(file) {
   return new Promise((resolve, reject) => {
-    const im = new Image();
+    const SIZE = 280;
     const src = URL.createObjectURL(file);
+    const im = new Image();
+    im.onerror = () => { URL.revokeObjectURL(src); reject(new Error('That file could not be opened as an image')); };
     im.onload = () => {
-      const c = document.createElement('canvas');
-      c.width = c.height = 256;
-      const s = Math.min(im.width, im.height);
-      c.getContext('2d').drawImage(im, (im.width - s) / 2, (im.height - s) / 2, s, s, 0, 0, 256, 256);
-      URL.revokeObjectURL(src);
-      resolve(c.toDataURL('image/jpeg', 0.86));
+      const base = SIZE / Math.min(im.naturalWidth, im.naturalHeight); // zoom 1 = image just covers the circle
+      let zoom = 1;
+      let x = (SIZE - im.naturalWidth * base) / 2;
+      let y = (SIZE - im.naturalHeight * base) / 2;
+      const back = document.createElement('div');
+      back.className = 'modal-back';
+      back.style.zIndex = 410;
+      back.innerHTML = `<div class="modal">
+        <h2>Adjust your photo</h2><p>Drag to move. Use the slider or mouse wheel to zoom.</p>
+        <div class="crop" id="cropBox"></div>
+        <div class="crop-zoom">${icon('user', 14)}<input type="range" id="cropZoom" min="1" max="4" step="0.01" value="1">${icon('user', 22)}</div>
+        <button class="btn btn-primary" id="cropOk" type="button">${icon('check', 18)} Use photo</button>
+        <button class="skip" id="cropCancel" type="button">Cancel</button>
+      </div>`;
+      document.body.append(back);
+      const box = $('#cropBox', back);
+      const slider = $('#cropZoom', back);
+      im.draggable = false;
+      box.append(im);
+      const draw = () => {
+        const k = base * zoom;
+        x = Math.min(0, Math.max(SIZE - im.naturalWidth * k, x));
+        y = Math.min(0, Math.max(SIZE - im.naturalHeight * k, y));
+        im.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
+        slider.style.setProperty('--v', `${((zoom - 1) / 3) * 100}%`);
+      };
+      const setZoom = (z) => { // keep the centre of the circle fixed while zooming
+        z = Math.min(4, Math.max(1, z));
+        const k0 = base * zoom, k1 = base * z;
+        x = SIZE / 2 - ((SIZE / 2 - x) / k0) * k1;
+        y = SIZE / 2 - ((SIZE / 2 - y) / k0) * k1;
+        zoom = z;
+        slider.value = z;
+        draw();
+      };
+      draw();
+      slider.oninput = () => setZoom(Number(slider.value));
+      box.addEventListener('wheel', (e) => { e.preventDefault(); setZoom(zoom * (e.deltaY < 0 ? 1.08 : 0.926)); }, { passive: false });
+      box.addEventListener('pointerdown', (e) => {
+        box.setPointerCapture(e.pointerId);
+        box.classList.add('drag');
+        let px = e.clientX, py = e.clientY;
+        const move = (ev) => { x += ev.clientX - px; y += ev.clientY - py; px = ev.clientX; py = ev.clientY; draw(); };
+        const up = () => { box.removeEventListener('pointermove', move); box.removeEventListener('pointerup', up); box.classList.remove('drag'); };
+        box.addEventListener('pointermove', move);
+        box.addEventListener('pointerup', up);
+      });
+      const close = (v) => { back.remove(); URL.revokeObjectURL(src); resolve(v); };
+      $('#cropCancel', back).onclick = () => close(null);
+      $('#cropOk', back).onclick = () => {
+        const k = base * zoom;
+        const c = document.createElement('canvas');
+        c.width = c.height = 256;
+        c.getContext('2d').drawImage(im, -x / k, -y / k, SIZE / k, SIZE / k, 0, 0, 256, 256);
+        close(c.toDataURL('image/jpeg', 0.88));
+      };
     };
-    im.onerror = () => { URL.revokeObjectURL(src); reject(new Error('That file is not an image')); };
     im.src = src;
   });
 }
@@ -201,7 +253,8 @@ export function profileDialog(edit = false) {
     $('#ppFile', back).onchange = async (e) => {
       const f = e.target.files[0];
       if (!f) return;
-      try { picture = await readPicture(f); paint(); } catch (err) { $('#ppErr', back).textContent = err.message; }
+      e.target.value = ''; // allow picking the same file again
+      try { const out = await cropDialog(f); if (out) { picture = out; paint(); } } catch (err) { $('#ppErr', back).textContent = err.message; }
     };
     const close = (v) => { back.remove(); resolve(v); };
     if (edit) $('#ppCancel', back).onclick = () => close(null);
