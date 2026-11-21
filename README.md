@@ -46,9 +46,20 @@ FFmpeg is bundled — nothing else to install.
 
 **Yours**
 - Watch **history** with progress bars and resume, plus **My List**
-- **Offline downloads** with pause/resume, saved to `Downloads/Circle Download/<Title>/<Season>/`
-- **Profile**: name and picture, total watch time, the time of day you watch most, favourite categories, most watched titles
+- **Offline downloads**: single files, a whole season, or a whole FTP folder in one click
+  - two files download at a time, the rest wait in a queue; pause and resume any time
+  - saved in tidy folders: `Downloads/Circle Download/<Title (Year)>/<Season>/<file>`
+  - the Downloads page shows one expandable folder per title with its seasons inside and a combined progress line
+  - finished files play from disk, even with no connection
+- **Profile**: first launch asks for your name (required) and a picture (optional, with a built-in
+  cropper); the profile page shows total watch time, the time of day you watch most, favourite
+  categories and most watched titles
 - **Dark and light** themes
+
+**App**
+- Opening animation, app version shown under the logo, About section with developer, repository and bug-report links
+- Clear errors when a server is offline or a file was removed
+- The window is either the default size or maximised/fullscreen — it cannot be dragged to odd sizes
 
 | Title page | Browse |
 | --- | --- |
@@ -112,6 +123,10 @@ build/          App icon (SVG source + generated PNG/ICO)
 
 Pushing a tag `vX.Y.Z` runs [the workflow](.github/workflows/release.yml), which builds the Windows
 installer and portable exe and attaches them to a GitHub Release.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
 
 ## Bugs and feedback
 
