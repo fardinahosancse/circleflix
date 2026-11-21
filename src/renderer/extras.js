@@ -86,7 +86,7 @@ async function onDlClick(btn) {
   refreshDlButtons(url);
 }
 
-function dlRow(d) {
+function dlRow(d, standalone = false) {
   const pct = d.status === 'done' ? 100 : d.size ? (d.received / d.size) * 100 : 0;
   const secLeft = d.speed > 0 && d.size ? (d.size - d.received) / d.speed : 0;
   const left = secLeft ? (secLeft < 60 ? `${Math.ceil(secLeft)}s left` : `${fmtDur(secLeft)} left`) : '';
@@ -100,7 +100,7 @@ function dlRow(d) {
   const ep = d.type === 'series' ? (String(d.postId).startsWith('ftp:') ? d.title : `S${d.season + 1} E${d.episode + 1} · ${d.title}`) : [d.year, d.quality].filter(Boolean).join(' · ') || 'Movie';
   return `<div class="dl-row ${d.status}" data-row="${esc(d.url)}">
     <div class="dl-thumb" data-dlplay="${esc(d.url)}"><img src="${poster(d)}" alt=""><span>${icon('play', 20)}</span></div>
-    <div class="dl-main"><b>${esc(ep)}</b><small class="${d.status === 'error' ? 'err' : ''}">${esc(status)}</small><div class="bar"><i style="width:${pct}%"></i></div></div>
+    <div class="dl-main"><b>${standalone ? esc(d.name) + ' <span style="color:var(--muted);font-weight:600">· ' + esc(ep) + '</span>' : esc(ep)}</b><small class="${d.status === 'error' ? 'err' : ''}">${esc(status)}</small><div class="bar"><i style="width:${pct}%"></i></div></div>
     <div class="dl-acts">
       ${d.status === 'done' ? `<button class="ibtn" data-dlplay="${esc(d.url)}" title="Play offline">${icon('play', 16)}</button><button class="ibtn" data-dlreveal="${esc(d.url)}" title="Show in folder">${icon('folderOpen', 17)}</button>` : ''}
       ${d.status === 'downloading' || d.status === 'queued' ? `<button class="ibtn" data-dlpause="${esc(d.url)}" title="Pause">${icon('pause', 16)}</button>` : ''}
@@ -109,19 +109,82 @@ function dlRow(d) {
     </div></div>`;
 }
 
+// Downloads are shown as folders: one per title, with a section per season inside. A title with
+// several files starts collapsed and shows one combined progress line, so a whole season does
+// not flood the page.
+const openGroups = new Set();
+const groupOf = (postId) => Object.values(S.downloads).filter((d) => d.postId === postId)
+  .sort((x, y) => x.season - y.season || x.episode - y.episode);
+
+function groupSummary(list) {
+  const done = list.filter((d) => d.status === 'done').length;
+  const active = list.filter((d) => d.status === 'downloading');
+  const queued = list.filter((d) => d.status === 'queued').length;
+  const paused = list.filter((d) => d.status === 'paused').length;
+  const failed = list.filter((d) => d.status === 'error').length;
+  const size = list.reduce((n, d) => n + (d.size || 0), 0);
+  const got = list.reduce((n, d) => n + (d.status === 'done' ? d.size : d.received || 0), 0);
+  const speed = active.reduce((n, d) => n + (d.speed || 0), 0);
+  const allSized = list.every((d) => d.size);
+  const pct = done === list.length ? 100 : allSized && size ? (got / size) * 100 : (done / list.length) * 100;
+  const bits = [`${done} of ${list.length} downloaded`];
+  if (active.length) bits.push(`${active.length} downloading · ${(speed / 1048576).toFixed(1)} MB/s`);
+  if (queued) bits.push(`${queued} queued`);
+  if (paused) bits.push(`${paused} paused`);
+  if (failed) bits.push(`${failed} failed`);
+  if (got) bits.push(fmtSize(got));
+  return { text: bits.join(' · '), pct, done: done === list.length, busy: active.length + queued > 0, resumable: paused + failed > 0 };
+}
+
+function groupHead(list) {
+  const g = groupSummary(list);
+  const id = esc(list[0].postId);
+  const seasons = new Set(list.map((d) => d.seasonName || d.season)).size;
+  return `<div class="dl-folder-head ${g.done ? 'done' : ''}" data-gtoggle="${id}">
+    <div class="dl-thumb"><img src="${poster(list[0])}" alt=""></div>
+    <div class="dl-main"><b>${icon('folder', 15)} ${esc(list[0].name)}</b>
+      <small>${seasons > 1 ? `${seasons} seasons · ` : ''}${list.length} episodes · ${esc(g.text)}</small>
+      <div class="bar"><i style="width:${g.pct}%"></i></div></div>
+    <div class="dl-acts">
+      ${g.busy ? `<button class="ibtn" data-gpause="${id}" title="Pause all">${icon('pause', 16)}</button>` : ''}
+      ${g.resumable ? `<button class="ibtn" data-gresume="${id}" title="Resume all">${icon('download', 17)}</button>` : ''}
+      <button class="ibtn" data-dlreveal="${esc(list[0].url)}" title="Open folder">${icon('folderOpen', 17)}</button>
+      <button class="ibtn danger" data-gremove="${id}" title="Delete all files of this title">${icon('trash', 16)}</button>
+      <span class="ibtn chev">${icon('chevDown', 18)}</span>
+    </div></div>`;
+}
+
+function groupHtml(list) {
+  if (list.length === 1) return `<section class="dl-group">${dlRow(list[0], true)}</section>`;
+  const id = list[0].postId;
+  const bySeason = new Map();
+  for (const d of list) { const k = d.seasonName || `Season ${d.season + 1}`; if (!bySeason.has(k)) bySeason.set(k, []); bySeason.get(k).push(d); }
+  return `<section class="dl-group dl-folder ${openGroups.has(id) ? 'open' : ''}" data-group="${esc(id)}">
+    ${groupHead(list)}
+    <div class="dl-children">${[...bySeason].map(([name, items]) => `<h4>${icon('layers', 14)} ${esc(name)} <small>${items.length} file${items.length > 1 ? 's' : ''}</small></h4>${items.map((d) => dlRow(d)).join('')}`).join('')}</div>
+  </section>`;
+}
+
 export function downloadsView(view) {
   const all = Object.values(S.downloads).sort((a, b) => b.addedAt - a.addedAt);
-  const groups = new Map();
-  for (const d of all) { if (!groups.has(d.postId)) groups.set(d.postId, []); groups.get(d.postId).push(d); }
+  const ids = [...new Set(all.map((d) => d.postId))];
   const total = all.filter((d) => d.status === 'done').reduce((s, d) => s + d.size, 0);
   view.innerHTML = `<div class="page">
-    <div class="page-title"><h1>Downloads</h1><span class="count">${all.length} file${all.length === 1 ? '' : 's'}${total ? ' · ' + fmtSize(total) + ' on disk' : ''}</span>
+    <div class="page-title"><h1>Downloads</h1><span class="count">${ids.length} title${ids.length === 1 ? '' : 's'} · ${all.length} file${all.length === 1 ? '' : 's'}${total ? ' · ' + fmtSize(total) + ' on disk' : ''}</span>
       <div class="actions"><button class="btn btn-glass btn-sm" data-dlreveal="">${icon('folderOpen', 16)} Open folder</button></div></div>
-    ${all.length ? [...groups.values()].map((list) => {
-      list.sort((a, b) => a.season - b.season || a.episode - b.episode);
-      return `<section class="dl-group"><h2>${esc(list[0].name)} <small>${list.length} file${list.length > 1 ? 's' : ''}</small></h2>${list.map(dlRow).join('')}</section>`;
-    }).join('') : `<div class="empty"><div class="big">${icon('download', 34)}</div><h3>Nothing downloaded yet</h3><p>Use the download button on any movie or episode to watch it offline.<br>Files are saved in ${esc(S.media.downloadDir)}</p></div>`}
+    ${all.length ? ids.map((id) => groupHtml(groupOf(id))).join('') : `<div class="empty"><div class="big">${icon('download', 34)}</div><h3>Nothing downloaded yet</h3><p>Use the download button on any movie or episode to watch it offline.<br>Files are saved in ${esc(S.media.downloadDir)}</p></div>`}
   </div>`;
+}
+
+// Live update of one item without rebuilding the page (keeps folders open and scroll position).
+function updateDownloadsPage(item, prev) {
+  const view = document.getElementById('view');
+  const row = document.querySelector(`[data-row="${CSS.escape(item.url)}"]`);
+  const structural = item.status === 'removed' || !row || !prev;
+  if (structural) { const top = view.scrollTop; downloadsView(view); view.scrollTop = top; return; }
+  row.outerHTML = dlRow(item, !row.closest('.dl-folder'));
+  const folder = document.querySelector(`[data-group="${CSS.escape(String(item.postId))}"]`);
+  if (folder) folder.querySelector('.dl-folder-head').outerHTML = groupHead(groupOf(item.postId));
 }
 
 // Plays a finished download. Works offline: if the catalog can't be reached, a title is rebuilt
@@ -356,11 +419,7 @@ export async function initExtras() {
     const prev = S.downloads[item.url];
     if (item.status === 'removed') delete S.downloads[item.url]; else S.downloads[item.url] = item;
     refreshDlButtons(item.url);
-    if (location.hash.startsWith('#/downloads')) {
-      const row = document.querySelector(`[data-row="${CSS.escape(item.url)}"]`);
-      if (row && item.status !== 'removed') row.outerHTML = dlRow(item);
-      else downloadsView(document.getElementById('view'));
-    }
+    if (location.hash.startsWith('#/downloads')) updateDownloadsPage(item, prev);
     if (item.status === 'done' && prev && prev.status !== 'done') toast(`Downloaded: ${item.title}`);
     if (item.status === 'error' && prev && prev.status !== 'error') toast(`Download failed: ${item.error}`, 'err');
   });
@@ -377,6 +436,18 @@ export async function initExtras() {
       else if ((el = q('data-dlresume'))) { stop(); await window.cf.dl.resume(el.dataset.dlresume); }
       else if ((el = q('data-dlreveal'))) { stop(); await window.cf.dl.reveal(el.dataset.dlreveal); }
       else if ((el = q('data-ext'))) { stop(); await window.cf.openExternal(el.dataset.ext); }
+      else if ((el = q('data-gpause'))) { stop(); for (const d of groupOf(el.dataset.gpause)) if (d.status === 'downloading' || d.status === 'queued') await window.cf.dl.pause(d.url); }
+      else if ((el = q('data-gresume'))) { stop(); for (const d of groupOf(el.dataset.gresume)) if (d.status === 'paused' || d.status === 'error') await window.cf.dl.resume(d.url); }
+      else if ((el = q('data-gremove'))) {
+        stop();
+        if (!el.dataset.armed) { el.dataset.armed = '1'; el.innerHTML = icon('check', 16); el.title = 'Click again to delete every file of this title'; el.style.background = '#ff4d6d'; el.style.color = '#fff'; return; }
+        for (const d of groupOf(el.dataset.gremove)) await window.cf.dl.remove(d.url);
+      }
+      else if ((el = q('data-gtoggle'))) {
+        const id = el.dataset.gtoggle;
+        if (openGroups.has(id)) openGroups.delete(id); else openGroups.add(id);
+        el.closest('.dl-folder').classList.toggle('open', openGroups.has(id));
+      }
       else if ((el = q('data-dlremove'))) {
         stop();
         if (!el.dataset.armed) { el.dataset.armed = '1'; el.innerHTML = icon('check', 16); el.title = 'Click again to delete the file'; el.style.background = '#ff4d6d'; el.style.color = '#fff'; return; }
