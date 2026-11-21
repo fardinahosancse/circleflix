@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: http://new.circleftp.net:5000; media-src http://127.0.0.1:*; connect-src http://127.0.0.1:*">
+  <title>CircleFlix</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="splash" id="splash">
+    <img src="logo.svg" alt="">
+    <div class="word"><span style="--i:0">C</span><span style="--i:1">I</span><span style="--i:2">R</span><span style="--i:3">C</span><span style="--i:4">L</span><span style="--i:5">E</span><span style="--i:6" class="fx">F</span><span style="--i:7" class="fx">L</span><span style="--i:8" class="fx">I</span><span style="--i:9" class="fx">X</span></div>
+    <div class="line"></div>
+  </div>
+  <div class="titlebar"></div>
+
+  <aside class="sidebar">
+    <a class="logo" href="#/home" title="CircleFlix"><img src="logo.svg" alt="CircleFlix"></a>
+    <span class="ver" id="ver"></span>
+    <nav class="side-nav" id="sideNav"></nav>
+    <div class="side-foot">
+      <div class="avatar" id="avatar" title="Profile"></div>
+    </div>
+  </aside>
+
+  <header class="topbar" id="topbar">
+    <nav class="top-nav" id="topNav"></nav>
+    <label class="search">
+      <span id="searchIcon"></span>
+      <input id="searchInput" type="search" placeholder="Search movies, series…" autocomplete="off" spellcheck="false">
+      <kbd>/</kbd>
+    </label>
+  </header>
+
+  <main class="view" id="view"></main>
+
+  <div class="player" id="player" hidden></div>
+  <div class="toasts" id="toasts"></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
