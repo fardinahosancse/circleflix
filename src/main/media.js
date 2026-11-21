@@ -56,7 +56,13 @@ function probe(url) {
     execFile(FFPROBE, ['-v', 'error', ...(local ? [] : ['-rw_timeout', '12000000']), '-print_format', 'json', '-show_format', '-show_streams', src],
       { timeout: 30000, maxBuffer: 8 * 1024 * 1024, windowsHide: true },
       (err, stdout, stderr) => {
-        if (err) return reject(new Error(explain(url, stderr, err)));
+        if (err) {
+          // FFprobe's own wording varies by version ("Unknown error"), so ask the server directly.
+          if (local) return reject(new Error('The downloaded file could not be read. It may have been moved or deleted.'));
+          return fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(6000) })
+            .then((r) => reject(new Error(explain(url, r.ok ? stderr : String(r.status), err))),
+              () => reject(new Error(explain(url, 'Connection failed', err))));
+        }
         let j;
         try { j = JSON.parse(stdout); } catch { return reject(new Error(explain(url, 'Invalid data'))); }
         const streams = j.streams || [];
