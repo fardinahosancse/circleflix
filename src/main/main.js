@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, screen } = require('electron');
 const path = require('path');
 const api = require('./api');
 const { Store } = require('./store');
@@ -18,11 +18,10 @@ const OVERLAY = {
 };
 
 function createWindow() {
+  const area = screen.getPrimaryDisplay().workAreaSize;
   win = new BrowserWindow({
-    width: 1440,
-    height: 900,
-    minWidth: 1024,
-    minHeight: 640,
+    width: Math.min(1440, area.width),
+    height: Math.min(900, area.height),
     backgroundColor: store.data.prefs.theme === 'light' ? '#f4f4fa' : '#07070c',
     title: 'CircleFlix',
     icon: path.join(__dirname, '..', '..', 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
@@ -37,6 +36,8 @@ function createWindow() {
     },
   });
   win.once('ready-to-show', () => win.show());
+  // Two window states only: the default size, or maximized/fullscreen. Dragging an edge does nothing.
+  win.on('will-resize', (e) => e.preventDefault());
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url)) shell.openExternal(url);
     return { action: 'deny' };
