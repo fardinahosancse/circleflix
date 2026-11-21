@@ -51,7 +51,9 @@ class Downloads {
   }
 
   pump() {
-    for (const it of this.list().reverse()) {
+    // oldest request first; a whole season added at once keeps episode order
+    const order = Object.values(this.items()).sort((a, b) => a.addedAt - b.addedAt || a.season - b.season || a.episode - b.episode);
+    for (const it of order) {
       if (this.active.size >= MAX_ACTIVE) break;
       if (it.status === 'queued' && !this.active.has(it.url)) this.run(it);
     }
